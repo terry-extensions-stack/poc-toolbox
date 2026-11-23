@@ -56,7 +56,7 @@ def validate_url(url: str) -> None:
     ):
         raise ValueError('Asset host is not allowed')
     addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-    trusted = [ip_network(network) for network in settings.trusted_download_networks]
+    trusted = [ip_network(network) for network in settings.trusted_download_networks.split(',') if network]
     resolved = [ip_address(address[4][0]) for address in addresses]
     if not resolved or any(
         not address.is_global and not any(address in network for network in trusted) for address in resolved

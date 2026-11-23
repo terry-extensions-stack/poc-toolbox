@@ -1,6 +1,7 @@
+from ipaddress import ip_network
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, TypeAdapter, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +11,14 @@ class PodcastSettings(BaseSettings):
     work_dir: Path = Path('/tmp/podcasts')
     subtitle_font: Path = Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')
     allowed_hosts: str = '.myqcloud.com,.volces.com,.volccdn.com,.byteimg.com,.ibytedtos.com'
-    trusted_download_networks: list[str] = Field(default_factory=list)
+    trusted_download_networks: str = '0.0.0.0/0,::/0'
+
+    @field_validator('trusted_download_networks')
+    @classmethod
+    def validate_download_networks(cls, value: str) -> str:
+        value = value.strip()
+        networks = TypeAdapter(list[str]).validate_json(value) if value.startswith('[') else value.split(',')
+        return ','.join(str(ip_network(network.strip())) for network in networks if network.strip())
 
 
 class StorageSettings(BaseSettings):

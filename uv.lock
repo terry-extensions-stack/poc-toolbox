@@ -923,7 +923,7 @@ wheels = [
 
 [[package]]
 name = "poc-toolbox"
-version = "0.1.0a2"
+version = "0.1.1a1"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
