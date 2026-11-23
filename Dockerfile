@@ -46,7 +46,7 @@ WORKDIR /app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     find /etc/apt/sources.list.d/ -type f \
-        -exec sed -i 's@http://deb.debian.org@https://mirrors.tuna.tsinghua.edu.cn@g' {} + \
+        -exec sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com@g' {} + \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
