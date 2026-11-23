@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Stage 2: Runtime
 # ============================================================
 
-FROM python:3.12.11-slim-bookworm AS runtime
+FROM reg.dev.mahanova.com/registry/public/mahanova/python-uv:3.12.11-slim-bookworm AS runtime
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
