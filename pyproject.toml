@@ -19,6 +19,11 @@ dependencies = [
     "uvicorn>=0.34.0",
 ]
 
+[[tool.uv.index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
 [project.scripts]
 poc-toolbox = "poc_toolbox:main"
 
