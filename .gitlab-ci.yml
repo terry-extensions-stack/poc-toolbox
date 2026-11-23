@@ -1,0 +1,95 @@
+stages:
+  - lint
+  - build
+
+lint-poc-toolbox:
+  stage: lint
+  image: reg.dev.mahanova.com/registry/public/astral-sh/uv:python3.12-bookworm
+  rules:
+    - if: '$CI_MERGE_REQUEST_ID'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "parent_pipeline"'
+    - when: never
+  variables:
+    UV_DEFAULT_INDEX: "https://pypi.tuna.tsinghua.edu.cn/simple"
+    UV_PYTHON_DOWNLOADS: "never"
+    UV_LINK_MODE: "copy"
+  script:
+    - cd "${CI_PROJECT_DIR}"
+    - |
+      echo "Running Ruff format check for src"
+      if ! uv run --locked --only-group test ruff format src --check --diff; then
+        printf '\033[1;31m%s\033[0m\n' \
+          "==================== RUFF FORMAT CHECK FAILED ====================" \
+          "One or more Python files are not formatted. See the diff above." \
+          "=================================================================="
+        exit 1
+      fi
+    - echo "Running Ruff lint check for src..."
+    - uv run --locked --only-group test ruff check src
+  after_script:
+    - cd "${CI_PROJECT_DIR}"
+    - |
+      set +e
+
+      uv run --locked --only-group test ruff check src \
+        --output-format gitlab \
+        --output-file gl-code-quality-lint.json
+
+      RUFF_EXIT_CODE=$?
+      if [ "${RUFF_EXIT_CODE}" -eq 0 ]; then
+        RUFF_STATUS="passed"
+      else
+        RUFF_STATUS="failed"
+      fi
+
+      printf '{"status":"%s","exit_code":%s,"commit":"%s","pipeline":"%s"}\n' \
+        "${RUFF_STATUS}" \
+        "${RUFF_EXIT_CODE}" \
+        "${CI_COMMIT_SHA}" \
+        "${CI_PIPELINE_ID}" \
+        > ruff-check-summary.json
+
+      exit 0
+  artifacts:
+    when: always
+    expire_in: 1 week
+    expose_as: "Ruff Check Results"
+    paths:
+      - gl-code-quality-lint.json
+      - ruff-check-summary.json
+    reports:
+      codequality: gl-code-quality-lint.json
+
+build-poc-toolbox:
+  stage: build
+  image:
+    name: reg.dev.mahanova.com/registry/public/kaniko-project/executor:v1.23.2-debug
+    entrypoint: [""]
+  script:
+    - cd "${CI_PROJECT_DIR}"
+    - |
+      APP_VERSION=$(awk -F "['\"]" '
+        /^\[project\]$/ {
+          in_project = 1
+          next
+        }
+        /^\[/ {
+          in_project = 0
+        }
+        in_project && /^[[:space:]]*version[[:space:]]*=/ {
+          print $2
+          exit
+        }
+      ' pyproject.toml)
+
+      if [ -z "${APP_VERSION}" ]; then
+        echo "Unable to read poc-toolbox version from [project]"
+        exit 1
+      fi
+
+      export APP_VERSION
+      echo "Building poc-toolbox image version: ${APP_VERSION}"
+    - /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "${CI_PROJECT_DIR}/Dockerfile"
+      --destination "${CI_REGISTRY_IMAGE}:${APP_VERSION}"

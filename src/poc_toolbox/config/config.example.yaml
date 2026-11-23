@@ -1,1 +1,7 @@
-# 默认配置
+# 环境变量配置示例；当前程序不会自动读取此 YAML 文件。
+# 将生成的密钥设置到同名环境变量，勿使用占位符运行。
+# 生成命令：
+# uv run python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+AI_CONFIG_ENCRYPTION_KEY: "<替换为生成的 Fernet 主密钥>"
+DATABASE_URL: "postgresql+asyncpg://toolbox:password@127.0.0.1:5432/poc_toolbox"
+TEST_DATABASE_URL: "postgresql+asyncpg://toolbox:password@127.0.0.1:5432/poc_toolbox_test"

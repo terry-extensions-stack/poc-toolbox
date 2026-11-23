@@ -1,10 +1,23 @@
 [project]
 name = "poc-toolbox"
-version = "0.1.0"
+version = "0.1.0-a1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pillow>=11,<13",
+    "celery[redis]>=5.6,<6",
+    "cos-python-sdk-v5>=1.9,<2",
+    "httpx>=0.28,<1",
+    "alembic>=1.16.0",
+    "asyncpg>=0.30.0",
+    "fastapi>=0.121.0",
+    "cryptography>=46.0.0",
+    "loguru>=0.8.0",
+    "pydantic-settings>=2.0.0",
+    "sqlalchemy[asyncio]>=2.1.9",
+    "uvicorn>=0.34.0",
+]
 
 [project.scripts]
 poc-toolbox = "poc_toolbox:main"
@@ -12,3 +25,59 @@ poc-toolbox = "poc_toolbox:main"
 [build-system]
 requires = ["uv_build>=0.8.14,<0.9.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+test = [
+    "httpx>=0.28.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=1.0.0",
+    "ruff>=0.17.5",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src"]
+exclude = [
+]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP",
+    "SIM",
+    "C4",
+    "PL",
+    #    "RUF", # Ruff 自身规则
+    "N", # 命名规范
+    "A", # 防止覆盖 Python 内置名称
+    "ARG", # 未使用的函数参数
+    "RET", # return 语句优化与错误检查
+    "PTH", # 建议使用 pathlib
+    "DTZ", # datetime 时区安全检查
+    "ASYNC", # 异步代码问题
+    "TID", # import style checks
+]
+
+[tool.ruff.lint.isort]
+lines-between-types = 1
+force-sort-within-sections = false
+relative-imports-order = "closest-to-furthest"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_api.py" = ["PLR2004"]
+"tests/test_repositories_postgres.py" = ["PLR2004"]

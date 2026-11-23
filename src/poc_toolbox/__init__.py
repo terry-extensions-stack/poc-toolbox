@@ -1,2 +1,2 @@
 def main() -> None:
-    print("Hello from poc-toolbox!")
+    print('Hello from poc-toolbox!')

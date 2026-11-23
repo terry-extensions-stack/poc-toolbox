@@ -9,3 +9,7 @@ wheels/
 # Virtual environments
 .venv
 .idea
+.coding-standards/
+/tests/input/
+/develop/cli.ps1
+/src/poc_toolbox/config/config.local.yaml
