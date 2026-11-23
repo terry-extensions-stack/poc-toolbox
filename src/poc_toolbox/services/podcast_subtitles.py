@@ -33,9 +33,9 @@ def layout_for(ratio: str) -> SubtitleLayout:
         width,
         height,
         math.ceil(width * 0.08 / 2) * 2,
-        math.ceil(height * 0.90 / 2) * 2,
+        math.ceil(height * 0.86 / 2) * 2,
         math.floor(width * 0.92 / 2) * 2,
-        math.floor(height * 0.98 / 2) * 2,
+        math.floor(height * 0.94 / 2) * 2,
         max(1, round(height * 0.024)),
         max(2, round(height * 0.005)),
     )

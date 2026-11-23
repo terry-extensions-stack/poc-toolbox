@@ -16,6 +16,8 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/pyproject.toml /app/pyproject.toml
 COPY alembic.ini ./
 COPY migrations ./migrations
+COPY --chmod=644 fonts/HarmonyOS_Sans_SC_Regular.ttf /usr/share/fonts/truetype/harmonyos/HarmonyOS_Sans_SC_Regular.ttf
+ENV PODCAST_SUBTITLE_FONT=/usr/share/fonts/truetype/harmonyos/HarmonyOS_Sans_SC_Regular.ttf
 USER app
 EXPOSE 8000
 CMD ["uvicorn", "poc_toolbox.main:app", "--host", "0.0.0.0", "--port", "8000"]

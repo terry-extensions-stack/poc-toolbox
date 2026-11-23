@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import math
+import os
 import time
 
 from uuid import UUID
@@ -11,7 +12,7 @@ from sqlalchemy.pool import NullPool
 
 from poc_toolbox.api.podcast_contracts import CreatePodcast
 from poc_toolbox.clients import podcast_storage as storage
-from poc_toolbox.clients.seedance import Seedance, download, image_data
+from poc_toolbox.clients.seedance import Seedance, diagnostic_text, download, image_data
 from poc_toolbox.config import DatabaseSettings
 from poc_toolbox.config.podcast import PodcastSettings, SeedanceSettings
 from poc_toolbox.db_models.podcast import PodcastJob
@@ -19,6 +20,22 @@ from poc_toolbox.services import podcast_media as media
 from poc_toolbox.services.podcast_queue import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+def failure_message(error: Exception) -> str:
+    message = str(error)
+    for name in (
+        'SEEDANCE_API_KEY',
+        'COS_SECRET_ID',
+        'COS_SECRET_KEY',
+        'AI_CONFIG_ENCRYPTION_KEY',
+        'DATABASE_URL',
+        'PODCAST_BROKER_URL',
+    ):
+        secret = os.environ.get(name)
+        if secret:
+            message = message.replace(secret, '[REDACTED]')
+    return diagnostic_text(message).strip() or 'Workflow failed; inspect worker configuration and source assets'
 
 
 def engine():
@@ -87,13 +104,12 @@ async def process(session, job: PodcastJob) -> None:
         job.output_key = storage.upload(output, f'{job.id}/final.mp4')
         job.status, job.error = 'SUCCEEDED', None
         await checkpoint(session, job, stage='DONE')
-    except Exception:
+    except Exception as error:
         job.status = 'SUBMISSION_UNKNOWN' if job.progress.get('submitting') else 'FAILED'
-        job.error = (
-            'Provider submission outcome unknown; manual reconciliation required'
-            if job.status == 'SUBMISSION_UNKNOWN'
-            else 'Workflow failed; inspect worker configuration and source assets'
-        )
+        message = failure_message(error)
+        if job.status == 'SUBMISSION_UNKNOWN':
+            message = f'Provider submission outcome unknown; manual reconciliation required: {message}'
+        job.error = message[:4000]
         await session.commit()
         raise
 
