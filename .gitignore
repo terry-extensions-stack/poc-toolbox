@@ -11,5 +11,5 @@ wheels/
 .idea
 .coding-standards/
 /tests/input/
-/develop/cli.ps1
+/develop/run_locally.ps1
 /src/poc_toolbox/config/config.local.yaml

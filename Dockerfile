@@ -17,6 +17,8 @@ COPY --from=builder /app/pyproject.toml /app/pyproject.toml
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY --chmod=644 fonts/HarmonyOS_Sans_SC_Regular.ttf /usr/share/fonts/truetype/harmonyos/HarmonyOS_Sans_SC_Regular.ttf
+RUN chmod 755 /usr/share/fonts /usr/share/fonts/truetype /usr/share/fonts/truetype/harmonyos \
+    && chmod 644 /usr/share/fonts/truetype/harmonyos/HarmonyOS_Sans_SC_Regular.ttf
 ENV PODCAST_SUBTITLE_FONT=/usr/share/fonts/truetype/harmonyos/HarmonyOS_Sans_SC_Regular.ttf
 USER app
 EXPOSE 8000
