@@ -7,7 +7,7 @@ lint-poc-toolbox:
   image: reg.dev.mahanova.com/registry/public/astral-sh/uv:python3.12-bookworm
   rules:
     - if: '$CI_MERGE_REQUEST_ID'
-    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "parent_pipeline"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
     - when: never
   variables:
     UV_DEFAULT_INDEX: "https://pypi.tuna.tsinghua.edu.cn/simple"

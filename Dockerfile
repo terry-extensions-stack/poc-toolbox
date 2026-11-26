@@ -43,11 +43,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
 WORKDIR /app
 
 # 1. Install runtime system dependencies
-#--mount=type=cache,target=/var/cache/apt,sharing=locked \
-#    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-#    find /etc/apt/sources.list.d/ -type f \
-#        -exec sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com@g' {} + \
-RUN apt-get update \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    find /etc/apt/sources.list.d/ -type f \
+        -exec sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com@g' {} + \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
         fonts-noto-cjk \
