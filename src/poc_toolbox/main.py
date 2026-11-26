@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from poc_toolbox.api.ai_templates import router as template_router
 from poc_toolbox.api.errors import register_error_handlers
 from poc_toolbox.api.model_configs import router as model_config_router
+from poc_toolbox.api.podcast_videos import router as video_router
 from poc_toolbox.api.podcasts import router as podcast_router
 from poc_toolbox.api.service_metadata import router as metadata_router
 from poc_toolbox.config.project_metadata import load_project_metadata
@@ -17,4 +18,5 @@ app.include_router(metadata_router)
 app.include_router(model_config_router)
 app.include_router(template_router)
 app.include_router(podcast_router)
+app.include_router(video_router)
 register_error_handlers(app)
