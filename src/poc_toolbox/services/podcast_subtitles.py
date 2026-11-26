@@ -100,10 +100,25 @@ def escape_ass(text: str) -> str:
 
 def write_subtitles(directory: Path, request: CreatePodcast) -> SubtitleLayout:
     layout = layout_for(request.aspect_ratio)
+    if request.layout is not None:
+        options = request.layout.subtitles
+        left, top, width, height = options.rect.pixels(layout.width, layout.height)
+        layout = SubtitleLayout(
+            layout.width,
+            layout.height,
+            left,
+            top,
+            left + width,
+            top + height,
+            max(1, round(options.font_size * layout.height)),
+            layout.padding,
+        )
     font_path = PodcastSettings().subtitle_font
     if not font_path.is_file():
         raise ValueError('PODCAST_SUBTITLE_FONT must point to an available font file')
     font = ImageFont.truetype(str(font_path), layout.font_size)
+    if request.layout is not None and 2 * sum(font.getmetrics()) + 2 * layout.padding > layout.bottom - layout.top:
+        raise ValueError('Subtitle region is too short for two lines at the configured font size')
     font_directory = directory / 'subtitle-fonts'
     font_directory.mkdir(exist_ok=True)
     shutil.copyfile(font_path, font_directory / f'subtitle{font_path.suffix}')

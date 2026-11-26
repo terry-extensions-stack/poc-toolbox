@@ -26,3 +26,16 @@ def upload(path: Path, key: str) -> str:
 def signed_download(key: str) -> str:
     connection, settings = client()
     return connection.get_presigned_download_url(Bucket=settings.bucket, Key=key, Expired=900)
+
+
+def download_video(key: str, destination: Path) -> None:
+    connection, settings = client()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    partial = destination.with_suffix('.part')
+    connection.download_file(Bucket=settings.bucket, Key=key, DestFilePath=str(partial))
+    partial.replace(destination)
+
+
+def delete_video(key: str) -> None:
+    connection, settings = client()
+    connection.delete_object(Bucket=settings.bucket, Key=key)

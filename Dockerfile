@@ -43,11 +43,11 @@ ENV PATH="/app/.venv/bin:$PATH" \
 WORKDIR /app
 
 # 1. Install runtime system dependencies
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    find /etc/apt/sources.list.d/ -type f \
-        -exec sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com@g' {} + \
-    && apt-get update \
+#--mount=type=cache,target=/var/cache/apt,sharing=locked \
+#    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+#    find /etc/apt/sources.list.d/ -type f \
+#        -exec sed -i 's@http://deb.debian.org@https://mirrors.aliyun.com@g' {} + \
+RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ffmpeg \
         fonts-noto-cjk \
@@ -75,6 +75,7 @@ COPY migrations ./migrations
 # 5. Install custom font
 COPY --chmod=644 fonts/HarmonyOS_Sans_SC_Regular.ttf \
     /usr/share/fonts/truetype/harmonyos/HarmonyOS_Sans_SC_Regular.ttf
+COPY --chmod=644 fonts/HarmonyOS_Sans_SC_Regular.ttf ./fonts/HarmonyOS_Sans_SC_Regular.ttf
 
 # 6. Run as non-root user
 USER app

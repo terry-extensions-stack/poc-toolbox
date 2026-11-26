@@ -57,7 +57,7 @@ URL 中的用户名或密码若包含特殊字符，需要进行 URL 编码。
 ## 播客视频工作流
 
 在 Compose 中填写 COS_REGION、COS_BUCKET、COS_SECRET_ID、COS_SECRET_KEY 和 COS_PREFIX。
-COS 账号需要指定前缀的上传和下载权限。API、worker 使用相同数据库和 Redis 配置。
+COS 账号需要指定前缀的上传、下载和删除权限。API、worker、beat 使用相同数据库和 Redis 配置。
 视频生成使用环境变量配置，不读取数据库模型配置。`SEEDANCE_API_KEY` 必填；
 `SEEDANCE_BASE_URL` 默认 `https://ark.cn-beijing.volces.com/api/v3`，
 `SEEDANCE_MODEL_ID` 默认 `doubao-seedance-1-0-pro-fast-251015`，与参考脚本一致。
@@ -74,8 +74,8 @@ docker compose logs -f poc_toolbox_worker
 
 `POST /api/podcast-jobs` 接收示例 podcast_content.json 的字段，另外必须提供
 `image_url`，可选 `aspect_ratio`（默认 `9:16`，支持 `16:9`、`1:1`），不接受 `model_config_id`。
-可选 `burn_subtitles` 默认 `true`；传 `false` 关闭最终成品字幕。字幕由 FFmpeg 在全部镜头生成后烧录，
-不交给视频模型生成，分段视频不烧录字幕。历史任务未保存该字段时保持无字幕。
+新任务只生成无后期文字的完整基础视频。`burn_subtitles` 保留为兼容字段，基础生成阶段不烧录标题或字幕。
+字幕和标题通过独立接口预览、保存，每次从基础视频合成并替换当前成片，见 [编辑接口](docs/podcast-renders.md)。
 请求头必须包含 `Idempotency-Key`，同一次任务重试使用同一个值；相同键与不同内容返回 422。
 任务提交数据库后立即发送 Celery，由 worker 执行，不依赖定时扫描。素材 URL 必须是可直接下载的 HTTPS 地址。
 队列发送未确认时返回 503，任务记录保留；使用原请求及同一 Idempotency-Key 重试会重新投递 QUEUED 任务。
@@ -104,15 +104,16 @@ key 长度为 1–200，精确匹配，不裁剪空白、不改变大小写；�
 短段请求至少 2 秒后裁剪。每段实际末帧提取为 JPEG 并转 Base64，作为下一镜头首帧。
 最终视频使用原音频，总时长以音频为准。
 字幕结束时间超过音频时，将整条字幕时间轴等比例压缩到音频时长，用于规划镜头。
-最终合成拼接画面、合入原音频，并按 `burn_subtitles` 决定是否烧录字幕。
+基础合成拼接画面、合入原音频，不添加标题或字幕；独立保存接口按 `burn_subtitles` 决定是否显示字幕。
 字幕位于横向 8%–92%、纵向 86%–94% 的区域，白字细黑描边、半透明黑底，每屏最多两行，硬裁剪防止越界。
 长句按实际字体宽度拆屏，按有效文字量分配原句时长；句内换屏时间为估算值，保留原句起止时间及句间空白。
 开启时保存 `subtitles.srt`、`subtitles.ass`；关闭时仍保存独立 SRT。短至不足一帧的字幕屏会报错而不丢字。
 字体由 `PODCAST_SUBTITLE_FONT` 指定，默认 `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`，镜像已安装。
 Windows 本地运行可设置 `$env:PODCAST_SUBTITLE_FONT = 'C:/Windows/Fonts/msyh.ttc'`；字体不可用时任务失败。
-更新依赖后重新构建 worker 镜像；不需要数据库迁移。修改字幕开关应使用新的 `Idempotency-Key` 创建任务。
+本次升级需运行迁移 `0005`，同步部署 API、worker、beat。修改标题或字幕使用独立保存接口与新的 `Idempotency-Key`。
 字幕比音频短时保留原时间轴，最后一个镜头延续至音频结束；不改变音频速度。
-最终文件保存在 COS 的 `前缀/任务ID/final.mp4`，本地中间文件保存在 podcast_data 持久卷。
+基础视频保存在 COS 的 `前缀/任务ID/base.mp4`，编辑成片为同目录的 `edited-保存任务ID.mp4`。
+旧成片在新成片发布后异步清理，基础视频始终保留；本地中间文件保存在 podcast_data 持久卷。
 FFmpeg 解码、编码各限制为 2 个线程，滤镜限制为 1 个线程，避免多 worker 并行时自动开启过多线程。
 媒体处理失败时，worker 日志包含工作目录、退出码和最近的 stderr；超时会单独记录。
 供应商生成失败时，worker 日志包含本地任务 ID、片段编号、供应商任务 ID、状态、错误码、错误消息与请求追踪 ID。
@@ -126,6 +127,18 @@ FFmpeg 解码、编码各限制为 2 个线程，滤镜限制为 1 个线程，�
 若提交供应商请求时断线或进程崩溃，无法确认是否计费，任务进入 SUBMISSION_UNKNOWN，
 不会自动重提；需人工核对供应商控制台。避免在不确定结果时创建重复任务。
 无需 beat。数据库任务锁避免相同任务同时执行，Celery 延迟确认使 worker 异常退出后的消息可重新投递。
+Worker 数据库临时断连会重试当前读写步骤，默认最多 120 秒，由 `PODCAST_DATABASE_RETRY_TIMEOUT_SECONDS` 配置。
+等待间隔为 2、4、8、16 秒，之后每 20 秒一次；等待时间和单次数据库操作超时受剩余预算限制。
+连接拒绝、中断、超时和数据库暂不可用可重试，SQL、参数及约束错误不重试。
+每次写入使用新 Session/事务，失败事务关闭回滚，避免 `PendingRollbackError` 覆盖原始错误。
+数据库恢复后检查任务锁，锁连接失效则重新获取；其他 worker 已持有锁时停止当前执行。
+火山提交成功后立即记录供应商任务 ID，并原子写入工作目录的 `provider-{index}.json`，再保存数据库进度。
+恢复同一任务时会核对本地记录并复用供应商任务 ID，不重复提交生成请求；请保留共享持久卷中的恢复记录。
+超过重试预算仍不可用时保留原始错误和本地记录，停止当前执行，不启动整条 Celery 任务的自动重试。
+数据库不可用时失败状态可能无法落库，日志会明确提示；数据库显示 RUNNING 不代表 worker 仍在运行。
+恢复此类超时任务需要在数据库恢复后确认无其他执行者，再由运维投递同一任务 ID；FAILED 任务使用现有 retry 接口。
+没有本地记录且持久进度为 `submitting=true` 时，仍停止并要求核对供应商任务；不能自动重提付费请求。
+此能力仅适用于 worker，不改变 API 或火山提交请求的重试策略；无需数据库迁移或修改 Dockerfile，需重新构建部署 worker。
 数据库提交与 Redis 投递不是原子操作：API 在两者之间退出时，客户端需用相同请求与幂等键重试。
 素材下载只允许 PODCAST_ALLOWED_HOSTS 配置的主机/域名后缀，拒绝重定向，IP 网段按以下配置校验；
 供应商视频下载域名若不同，需要将实际域名加入白名单。
@@ -142,6 +155,9 @@ stringData:
 ```
 
 ## 数据接口
+
+播客视频支持可选 `layout` 配置，实现横屏素材居中、顶部标题、底部字幕，以及前端拖拽布局。
+请求示例、坐标换算和兼容规则见 [播客布局说明](docs/podcast-layout.md)。
 
 `/api/model-configs` 和 `/api/ai-templates` 都支持 POST 创建、GET 分页查询，
 以及 `/{id}` 的 GET、PATCH、DELETE。模型配置创建字段为 `name`、`base_url`、

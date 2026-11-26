@@ -3,7 +3,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, model_validator
 
+from poc_toolbox.api.podcast_layout_contracts import SHARED_RENDER_VERSION, PodcastLayout
+
 MAX_DURATION_MS = 1800000
+MAX_LAYOUT_TEXT = 100000
 
 
 class PodcastResponse(BaseModel):
@@ -13,6 +16,10 @@ class PodcastResponse(BaseModel):
     error: str | None
     download_url: str | None
     segments_url: str
+    base_video_url: str | None = None
+    current_render_id: UUID | None = None
+    active_render_id: UUID | None = None
+    base_video_status: str | None = None
 
 
 class PodcastSegmentResponse(BaseModel):
@@ -55,9 +62,17 @@ class CreatePodcast(BaseModel):
     image_url: HttpUrl
     aspect_ratio: Literal['9:16', '16:9', '1:1'] = '9:16'
     burn_subtitles: bool = True
+    layout: PodcastLayout | None = None
 
     @model_validator(mode='after')
     def validate_timeline(self) -> Self:
+        if self.layout is not None:
+            self.layout.validate_canvas(self.aspect_ratio)
+            if (
+                self.layout.render_version == SHARED_RENDER_VERSION
+                and sum(len(item.text) for item in self.sentences) > MAX_LAYOUT_TEXT
+            ):
+                raise ValueError('Layout text exceeds the preview limit')
         previous_end = 0
         for sentence in self.sentences:
             if sentence.start_time < previous_end or sentence.end_time <= sentence.start_time:

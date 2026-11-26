@@ -8,4 +8,10 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
+    imports=(
+        'poc_toolbox.services.podcast_renders.tasks',
+        'poc_toolbox.services.podcast_renders.conversion',
+        'poc_toolbox.services.podcast_renders.recovery',
+    ),
+    beat_schedule={'recover-podcast-saves': {'task': 'podcasts.recover', 'schedule': 60.0}},
 )

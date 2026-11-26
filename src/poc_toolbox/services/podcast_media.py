@@ -6,7 +6,10 @@ import subprocess
 from pathlib import Path
 
 from poc_toolbox.api.podcast_contracts import CreatePodcast
+from poc_toolbox.api.podcast_layout_contracts import SHARED_RENDER_VERSION, VIDEO_SIZES
+from poc_toolbox.services.podcast_overlays import overlay_arguments
 from poc_toolbox.services.podcast_subtitles import subtitle_filter
+from poc_toolbox.services.podcast_titles import title_filter
 
 MAX_DURATION_SECONDS = 1800
 FFMPEG_THREADS = 2
@@ -71,13 +74,20 @@ def plan(request: CreatePodcast, duration: float) -> list[tuple[str, float]]:
     return clips
 
 
-def normalize(directory: Path, index: int, duration: float, ratio: str) -> None:
-    width, height = {'9:16': (720, 1280), '16:9': (1280, 720), '1:1': (720, 720)}[ratio]
-    filters = (
-        f'scale={width}:{height}:force_original_aspect_ratio=decrease,'
-        f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=25,'
-        'tpad=stop_mode=clone:stop_duration=12'
+def normalize(directory: Path, index: int, duration: float, request: CreatePodcast) -> None:
+    layout = request.layout
+    width, height = VIDEO_SIZES[request.aspect_ratio]
+    if layout is not None:
+        _, _, width, height = layout.video_pixels(request.aspect_ratio)
+    fit = (
+        f'scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},'
+        if layout is not None and layout.video.fit == 'cover'
+        else f'scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2,'
+        f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,'
     )
+    if layout is None:
+        fit = f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,'
+    filters = f'{fit}setsar=1,fps=25,tpad=stop_mode=clone:stop_duration=12'
     command(
         [
             'ffmpeg',
@@ -101,16 +111,21 @@ def normalize(directory: Path, index: int, duration: float, ratio: str) -> None:
         ],
         directory,
     )
+    reference_input = ['-sseof', '-0.04', '-i', f'clip-{index}.mp4']
+    if layout is not None and layout.render_version == SHARED_RENDER_VERSION:
+        source = f'raw-{index}.mp4'
+        metadata = command(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'json', source], directory
+        )
+        source_duration = float(json.loads(metadata)['format']['duration'])
+        reference_input = ['-ss', str(max(0, min(duration, source_duration) - 0.04)), '-i', source]
     command(
         [
             'ffmpeg',
             '-v',
             'error',
             '-y',
-            '-sseof',
-            '-0.04',
-            '-i',
-            f'clip-{index}.mp4',
+            *reference_input,
             '-frames:v',
             '1',
             '-threads',
@@ -148,7 +163,23 @@ def assemble(directory: Path, request: CreatePodcast, clips: int, duration: floa
     (directory / 'concat.txt').write_text(
         ''.join(f"file 'clip-{index}.mp4'\n" for index in range(clips)), encoding='utf-8'
     )
-    subtitle_arguments = ['-vf', subtitle_filter(directory, request)] if request.burn_subtitles else []
+    filters = []
+    if request.layout is not None and request.layout.render_version == 1:
+        width, height = VIDEO_SIZES[request.aspect_ratio]
+        x, y, _, _ = request.layout.video_pixels(request.aspect_ratio)
+        color = request.layout.background_color.replace('#', '0x')
+        filters.append(f'pad={width}:{height}:{x}:{y}:color={color}')
+        title = title_filter(directory, request, duration)
+        if title:
+            filters.append(title)
+    version_two = request.layout is not None and request.layout.render_version == SHARED_RENDER_VERSION
+    if request.burn_subtitles and not version_two:
+        filters.append(subtitle_filter(directory, request))
+    subtitle_arguments = ['-vf', ','.join(filters)] if filters else []
+    mapping = ['-map', '0:v:0', '-map', '1:a:0']
+    if version_two:
+        subtitle_arguments = overlay_arguments(directory, request, duration)
+        mapping = ['-map', '[out]', '-map', '1:a:0']
     command(
         [
             'ffmpeg',
@@ -163,11 +194,8 @@ def assemble(directory: Path, request: CreatePodcast, clips: int, duration: floa
             'concat.txt',
             '-i',
             'audio',
-            '-map',
-            '0:v:0',
-            '-map',
-            '1:a:0',
             *subtitle_arguments,
+            *mapping,
             '-c:v',
             'libx264',
             '-threads',
@@ -185,3 +213,24 @@ def assemble(directory: Path, request: CreatePodcast, clips: int, duration: floa
         directory,
     )
     return directory / 'final.mp4'
+
+
+def assemble_base(directory: Path, request: CreatePodcast, clips: int, duration: float) -> Path:
+    clean = request.model_copy(deep=True, update={'burn_subtitles': False})
+    if clean.layout is not None:
+        clean.layout.render_version = 1
+        clean.layout.title.text = ''
+    return assemble(directory, clean, clips, duration)
+
+
+def base_metadata(request: CreatePodcast, duration: float) -> dict:
+    aligned = align_timeline(request, duration)
+    return {
+        'duration_ms': round(duration * 1000),
+        'width': VIDEO_SIZES[request.aspect_ratio][0],
+        'height': VIDEO_SIZES[request.aspect_ratio][1],
+        'sentences': [
+            {**item.model_dump(), 'start_time': round(item.start_time), 'end_time': round(item.end_time)}
+            for item in aligned.sentences
+        ],
+    }

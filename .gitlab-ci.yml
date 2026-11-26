@@ -95,4 +95,4 @@ build-poc-toolbox:
       --destination "${CI_REGISTRY_IMAGE}:${APP_VERSION}"
       --cache=true
       --cache-repo "${CI_REGISTRY_IMAGE}/cache"
-      --cache-ttl 168h
+      --cache-ttl 120h

@@ -18,12 +18,16 @@ from poc_toolbox.api.dependencies import PaginationDependency, SessionDependency
 from poc_toolbox.api.errors import APIError
 from poc_toolbox.api.podcast_contracts import CreatePodcast, PodcastPage, PodcastResponse, PodcastSegmentPage
 from poc_toolbox.api.podcast_lookup import require_job
+from poc_toolbox.api.podcast_preview import router as preview_router
+from poc_toolbox.api.podcast_renders import router as render_router
 from poc_toolbox.clients.podcast_storage import signed_download
 from poc_toolbox.config.podcast import PodcastSettings
 from poc_toolbox.db_models.podcast import PodcastJob
 from poc_toolbox.services.podcast_queue import celery_app
 
 router = APIRouter(prefix='/api/podcast-jobs', tags=['podcast-jobs'])
+router.include_router(preview_router)
+router.include_router(render_router)
 
 
 async def submission_session(request: Request) -> AsyncIterator[AsyncSession]:
@@ -53,6 +57,12 @@ def describe(job: PodcastJob) -> dict:
         'error': job.error,
         'download_url': f'/api/podcast-jobs/{job.id}/download' if job.output_key else None,
         'segments_url': f'/api/podcast-jobs/{job.id}/segments',
+        'base_video_url': f'/api/podcast-jobs/{job.id}/base-video' if job.base_video_key else None,
+        'current_render_id': job.current_render_id,
+        'active_render_id': job.active_render_id,
+        'base_video_status': (
+            'SUCCEEDED' if job.base_video_key else (job.media_metadata or {}).get('conversion_status')
+        ),
     }
 
 
@@ -63,6 +73,10 @@ async def create_job(
     idempotency_key: Annotated[str, Header(min_length=1, max_length=200)],
 ) -> dict:
     payload = request.model_dump(mode='json')
+    if request.layout is None:
+        payload.pop('layout')
+    elif request.layout.render_version == 1:
+        payload['layout'].pop('render_version')
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
     statement = (
         insert(PodcastJob)
@@ -73,6 +87,7 @@ async def create_job(
             payload=payload,
             status='QUEUED',
             progress={},
+            workflow_version=2,
         )
         .on_conflict_do_nothing(index_elements=['idempotency_key'])
     )
@@ -150,7 +165,9 @@ async def download_job(job_id: UUID, session: SessionDependency) -> RedirectResp
     job = await require_job(session, job_id)
     if job.status != 'SUCCEEDED' or not job.output_key:
         raise APIError(409, 'VIDEO_NOT_READY', 'Video is not ready')
-    return RedirectResponse(await run_in_threadpool(signed_download, job.output_key), status_code=307)
+    response = RedirectResponse(await run_in_threadpool(signed_download, job.output_key), status_code=307)
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @router.get('/{job_id}/segments', response_model=PodcastSegmentPage)

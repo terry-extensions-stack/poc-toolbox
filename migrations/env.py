@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from poc_toolbox.config import DatabaseSettings
 from poc_toolbox.db_models import BaseModel
 from poc_toolbox.db_models.podcast import PodcastJob  # noqa: F401
+from poc_toolbox.db_models.podcast_render import PodcastRender  # noqa: F401
 
 target_metadata = BaseModel.metadata
 
