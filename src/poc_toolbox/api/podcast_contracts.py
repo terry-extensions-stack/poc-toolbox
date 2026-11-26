@@ -9,6 +9,24 @@ MAX_DURATION_MS = 1800000
 MAX_LAYOUT_TEXT = 100000
 
 
+class PodcastBatchStatusRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    ids: list[UUID] = Field(
+        min_length=1,
+        max_length=100,
+        description='Podcast UUIDs stored in podcast_jobs.payload.id, not task or article IDs',
+    )
+
+
+class PodcastStatusResponse(BaseModel):
+    id: UUID
+    status: str | None
+
+
+class PodcastBatchStatusResponse(BaseModel):
+    items: list[PodcastStatusResponse]
+
+
 class PodcastResponse(BaseModel):
     id: UUID
     status: str

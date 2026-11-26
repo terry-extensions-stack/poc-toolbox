@@ -2,7 +2,8 @@ from celery import Celery
 
 from poc_toolbox.config.podcast import PodcastSettings
 
-celery_app = Celery('podcasts', broker=PodcastSettings().broker_url)
+settings = PodcastSettings()
+celery_app = Celery('podcasts', broker=settings.broker_url)
 celery_app.conf.update(
     task_ignore_result=True,
     worker_prefetch_multiplier=1,
@@ -13,5 +14,7 @@ celery_app.conf.update(
         'poc_toolbox.services.podcast_renders.conversion',
         'poc_toolbox.services.podcast_renders.recovery',
     ),
-    beat_schedule={'recover-podcast-saves': {'task': 'podcasts.recover', 'schedule': 60.0}},
+    beat_schedule={
+        'recover-podcast-saves': {'task': 'podcasts.recover', 'schedule': settings.recovery_interval_seconds}
+    },
 )

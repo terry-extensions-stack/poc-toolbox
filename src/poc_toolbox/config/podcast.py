@@ -8,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class PodcastSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix='PODCAST_', hide_input_in_errors=True)
     broker_url: str = 'redis://redis:6379/0'
+    recovery_interval_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
     work_dir: Path = Path('/tmp/podcasts')
     database_retry_timeout_seconds: float = Field(default=120, gt=0, allow_inf_nan=False)
     subtitle_font: Path = Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc')

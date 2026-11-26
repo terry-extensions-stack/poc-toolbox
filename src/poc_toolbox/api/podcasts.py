@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 
 from poc_toolbox.api.dependencies import PaginationDependency, SessionDependency
 from poc_toolbox.api.errors import APIError
+from poc_toolbox.api.podcast_batch_status import router as batch_status_router
 from poc_toolbox.api.podcast_contracts import CreatePodcast, PodcastPage, PodcastResponse, PodcastSegmentPage
 from poc_toolbox.api.podcast_lookup import require_job
 from poc_toolbox.api.podcast_preview import router as preview_router
@@ -26,8 +27,9 @@ from poc_toolbox.db_models.podcast import PodcastJob
 from poc_toolbox.services.podcast_queue import celery_app
 
 router = APIRouter(prefix='/api/podcast-jobs', tags=['podcast-jobs'])
-router.include_router(preview_router)
-router.include_router(render_router)
+router.include_router(batch_status_router, tags=['batch_status'])
+router.include_router(preview_router, tags=['preview'])
+router.include_router(render_router, tags=['render'])
 
 
 async def submission_session(request: Request) -> AsyncIterator[AsyncSession]:
